@@ -1,10 +1,20 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useStore } from '@/lib/store';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 export function LoadingOverlay() {
-  const { isLoading } = useStore();
+  const { isLoading, setLoading } = useStore();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // Reset loading state when route changes
+  useEffect(() => {
+    if (isLoading) {
+      setLoading(false);
+    }
+  }, [pathname, searchParams, setLoading, isLoading]);
 
   if (!isLoading) return null;
 

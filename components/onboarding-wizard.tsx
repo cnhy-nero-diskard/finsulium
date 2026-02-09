@@ -19,7 +19,6 @@ import { Lock, Database, Key, CheckCircle2, AlertCircle, Download } from 'lucide
 
 export default function OnboardingWizard() {
   const [step, setStep] = useState(1);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
   // Step 1: Supabase credentials
@@ -34,7 +33,15 @@ export default function OnboardingWizard() {
   const [generatedKey, setGeneratedKey] = useState('');
   const [keyDownloaded, setKeyDownloaded] = useState(false);
 
-  const { setCredentials, setEncryptionConfig, setEncryptionKey, setSalt, setOnboarded } = useStore();
+  const { 
+    setCredentials, 
+    setEncryptionConfig, 
+    setEncryptionKey, 
+    setSalt, 
+    setOnboarded,
+    isLoading: loading,
+    setLoading 
+  } = useStore();
 
   const handleTestConnection = async () => {
     setLoading(true);

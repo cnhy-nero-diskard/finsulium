@@ -7,13 +7,14 @@ import OnboardingWizard from '@/components/onboarding-wizard';
 
 export default function Home() {
   const router = useRouter();
-  const { isOnboarded } = useStore();
+  const { isOnboarded, setLoading } = useStore();
 
   useEffect(() => {
     if (isOnboarded) {
+      setLoading(true);
       router.push('/dashboard');
     }
-  }, [isOnboarded, router]);
+  }, [isOnboarded, router, setLoading]);
 
   if (isOnboarded) {
     return null; // Will redirect

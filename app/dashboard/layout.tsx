@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useStore } from '@/lib/store';
 import { initializeSupabase } from '@/lib/supabase';
 import { 
@@ -22,7 +22,8 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const { isOnboarded, credentials, clearCredentials } = useStore();
+  const pathname = usePathname();
+  const { isOnboarded, credentials, clearCredentials, setLoading } = useStore();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -43,6 +44,7 @@ export default function DashboardLayout({
   }, [isOnboarded, credentials, router]);
 
   const handleLogout = () => {
+    setLoading(true);
     clearCredentials();
     router.push('/');
   };
@@ -62,42 +64,72 @@ export default function DashboardLayout({
 
         <nav className="flex-1 px-3">
           <div className="space-y-1">
-            <Link href="/dashboard">
+            <Link 
+              href="/dashboard" 
+              onClick={() => {
+                if (pathname !== '/dashboard') setLoading(true);
+              }}
+            >
               <Button variant="ghost" className="w-full justify-start">
                 <LayoutDashboard className="w-4 h-4 mr-2" />
                 Dashboard
               </Button>
             </Link>
 
-            <Link href="/dashboard/transactions">
+            <Link 
+              href="/dashboard/transactions" 
+              onClick={() => {
+                if (pathname !== '/dashboard/transactions') setLoading(true);
+              }}
+            >
               <Button variant="ghost" className="w-full justify-start">
                 <Plus className="w-4 h-4 mr-2" />
                 Transactions
               </Button>
             </Link>
 
-            <Link href="/dashboard/analytics">
+            <Link 
+              href="/dashboard/analytics" 
+              onClick={() => {
+                if (pathname !== '/dashboard/analytics') setLoading(true);
+              }}
+            >
               <Button variant="ghost" className="w-full justify-start">
                 <TrendingUp className="w-4 h-4 mr-2" />
                 Analytics
               </Button>
             </Link>
 
-            <Link href="/dashboard/goals">
+            <Link 
+              href="/dashboard/goals" 
+              onClick={() => {
+                if (pathname !== '/dashboard/goals') setLoading(true);
+              }}
+            >
               <Button variant="ghost" className="w-full justify-start">
                 <Target className="w-4 h-4 mr-2" />
                 Goals
               </Button>
             </Link>
 
-            <Link href="/dashboard/export">
+            <Link 
+              href="/dashboard/export" 
+              onClick={() => {
+                if (pathname !== '/dashboard/export') setLoading(true);
+              }}
+            >
               <Button variant="ghost" className="w-full justify-start">
                 <Download className="w-4 h-4 mr-2" />
                 Export Data
               </Button>
             </Link>
 
-            <Link href="/dashboard/settings">
+            <Link 
+              href="/dashboard/settings" 
+              onClick={() => {
+                if (pathname !== '/dashboard/settings') setLoading(true);
+              }}
+            >
               <Button variant="ghost" className="w-full justify-start">
                 <Settings className="w-4 h-4 mr-2" />
                 Settings

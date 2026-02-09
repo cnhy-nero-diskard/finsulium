@@ -1,16 +1,16 @@
 'use client';
 
-import { useLoading } from '@/lib/loading-context';
+import { useStore } from '@/lib/store';
 
 export function usePageLoading() {
-  const { setIsLoading } = useLoading();
+  const { setLoading } = useStore();
 
   const showLoading = () => {
-    setIsLoading(true);
+    setLoading(true);
   };
 
   const hideLoading = () => {
-    setIsLoading(false);
+    setLoading(false);
   };
 
   return { showLoading, hideLoading };
