@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transaction Parser - JSON to CSV</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 900px;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-title::before {
+            content: '';
+            display: inline-block;
+            width: 4px;
+            height: 20px;
+            background: #667eea;
+            border-radius: 2px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        input[type="file"],
+        textarea {
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="file"] {
+            flex: 1;
+            cursor: pointer;
+        }
+
+        input[type="file"]:hover {
+            border-color: #667eea;
+        }
+
+        textarea {
+            width: 100%;
+            height: 200px;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            resize: vertical;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .btn-success {
+            background: #48bb78;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #38a169;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(72, 187, 120, 0.3);
+        }
+
+        .btn-success:active {
+            transform: translateY(0);
+        }
+
+        .btn-danger {
+            background: #f56565;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #e53e3e;
+        }
+
+        .preview-section {
+            background: #f9f9f9;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .preview-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .preview-table thead {
+            background: #667eea;
+            color: white;
+            position: sticky;
+            top: 0;
+        }
+
+        .preview-table th {
+            padding: 10px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .preview-table td {
+            padding: 8px 10px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .preview-table tbody tr:hover {
+            background: #f0f0f0;
+        }
+
+        .message-box {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+
+        .message-success {
+            background: #c6f6d5;
+            color: #22543d;
+            border-left: 4px solid #48bb78;
+        }
+
+        .message-error {
+            background: #fed7d7;
+            color: #742a2a;
+            border-left: 4px solid #f56565;
+        }
+
+        .message-info {
+            background: #bee3f8;
+            color: #2c5282;
+            border-left: 4px solid #4299e1;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-box {
+            background: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>💰 Transaction Parser</h1>
+        <p class="subtitle">Extract transaction data from JSON and export to CSV</p>
+
+        <div class="section">
+            <div class="section-title">Step 1: Load JSON File</div>
+            <div class="input-group">
+                <input type="file" id="fileInput" accept=".json" placeholder="Choose JSON file...">
+                <button class="btn-secondary" onclick="clearFile()">Clear</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Or Paste JSON</div>
+            <textarea id="jsonInput" placeholder="Paste your JSON data here..."></textarea>
+        </div>
+
+        <div id="messageBox"></div>
+
+        <div class="section">
+            <div class="button-group">
+                <button class="btn-primary" onclick="parseJSON()">
+                    <span>▶</span> Parse JSON
+                </button>
+                <button class="btn-success hidden" id="downloadBtn" onclick="downloadCSV()">
+                    <span>⬇</span> Download CSV
+                </button>
+                <button class="btn-danger" onclick="resetAll()">Reset All</button>
+            </div>
+        </div>
+
+        <div id="statsSection" class="hidden">
+            <div class="stats">
+                <div class="stat-box">
+                    <div class="stat-value" id="totalTransactions">0</div>
+                    <div class="stat-label">Total Transactions</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="incomeCount">0</div>
+                    <div class="stat-label">Income</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="expenseCount">0</div>
+                    <div class="stat-label">Expenses</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="totalAmount">0</div>
+                    <div class="stat-label">Total Amount</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section" id="previewSection" style="display: none;">
+            <div class="section-title">Preview (First 10 rows)</div>
+            <div class="preview-section">
+                <table class="preview-table" id="previewTable">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Amount</th>
+                            <th>Currency</th>
+                            <th>Category</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody id="previewBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let parsedData = [];
+
+        function showMessage(message, type = 'info') {
+            const messageBox = document.getElementById('messageBox');
+            messageBox.innerHTML = `<div class="message-box message-${type}">${message}</div>`;
+        }
+
+        function clearMessage() {
+            document.getElementById('messageBox').innerHTML = '';
+        }
+
+        function clearFile() {
+            document.getElementById('fileInput').value = '';
+            clearMessage();
+        }
+
+        function resetAll() {
+            document.getElementById('fileInput').value = '';
+            document.getElementById('jsonInput').value = '';
+            document.getElementById('previewSection').style.display = 'none';
+            document.getElementById('statsSection').classList.add('hidden');
+            document.getElementById('downloadBtn').classList.add('hidden');
+            clearMessage();
+            parsedData = [];
+        }
+
+        function extractAmount(body) {
+            if (!body) return 0;
+            
+            // Look for PHP xxx pattern followed by </b>
+            const match = body.match(/PHP\s[\d,]+(?:\.\d{2})?(?=<\/b>)/i);
+            
+            if (match) {
+                // Remove commas and convert to number
+                const amountStr = match[0].replace('PHP', '').trim().replace(/,/g, '');
+                return parseFloat(amountStr);
+            }
+            
+            return 0;
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return '';
+            
+            try {
+                const date = new Date(dateString);
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                const year = date.getFullYear();
+                
+                return `${month} ${day} ${year}`;
+            } catch (e) {
+                return dateString;
+            }
+        }
+
+        function determineType(message) {
+            const subject = (message.subject || '').toLowerCase();
+            const fromEmail = (message.fromEmail || '').toLowerCase();
+
+            // Always expense if pnbdebit-no-reply@pnb.com.ph
+            if (fromEmail === 'pnbdebit-no-reply@pnb.com.ph') {
+                return 'Expense';
+            }
+
+            // Income if specific emails
+            if (fromEmail === 'pnbinstapay-no-reply@pnb.com.ph' || 
+                fromEmail === 'no-reply@pnb.com.ph') {
+                return 'Income';
+            }
+
+            // Expense if subject contains these words
+            if (subject.includes('withdrawal') || subject.includes('purchase')) {
+                return 'Expense';
+            }
+
+            return 'Expense'; // Default to expense
+        }
+
+        function parseJSON() {
+            try {
+                clearMessage();
+                let jsonData = null;
+
+                // Try to get JSON from file or textarea
+                const fileInput = document.getElementById('fileInput');
+                const jsonInput = document.getElementById('jsonInput');
+
+                if (fileInput.files.length > 0) {
+                    const file = fileInput.files[0];
+                    const reader = new FileReader();
+                    
+                    reader.onload = function(e) {
+                        try {
+                            jsonData = JSON.parse(e.target.result);
+                            processJSON(jsonData);
+                        } catch (error) {
+                            showMessage(`❌ Invalid JSON in file: ${error.message}`, 'error');
+                        }
+                    };
+                    
+                    reader.readAsText(file);
+                } else if (jsonInput.value.trim()) {
+                    try {
+                        jsonData = JSON.parse(jsonInput.value);
+                        processJSON(jsonData);
+                    } catch (error) {
+                        showMessage(`❌ Invalid JSON: ${error.message}`, 'error');
+                    }
+                } else {
+                    showMessage('⚠️ Please select a file or paste JSON data', 'info');
+                }
+            } catch (error) {
+                showMessage(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        function processJSON(jsonData) {
+            try {
+                parsedData = [];
+                const messages = jsonData.messages || [];
+
+                if (!Array.isArray(messages) || messages.length === 0) {
+                    showMessage('⚠️ No messages found in JSON data', 'info');
+                    return;
+                }
+
+                // Process each message
+                messages.forEach(message => {
+                    const amount = extractAmount(message.body);
+                    
+                    // Skip transactions with 0 amount
+                    if (amount === 0) return;
+
+                    const transaction = {
+                        date: formatDate(message.date),
+                        type: determineType(message),
+                        amount: amount.toFixed(2),
+                        currency: 'PHP',
+                        category: 'Other expense',
+                        description: message.subject || '',
+                        mood: '',
+                        tags: '',
+                        notes: ''
+                    };
+
+                    parsedData.push(transaction);
+                });
+
+                if (parsedData.length === 0) {
+                    showMessage('⚠️ No valid transactions found in JSON data', 'info');
+                    return;
+                }
+
+                showMessage(`✅ Successfully parsed ${parsedData.length} transactions`, 'success');
+                displayPreview();
+                displayStats();
+                document.getElementById('downloadBtn').classList.remove('hidden');
+
+            } catch (error) {
+                showMessage(`❌ Error processing JSON: ${error.message}`, 'error');
+            }
+        }
+
+        function displayPreview() {
+            const previewBody = document.getElementById('previewBody');
+            previewBody.innerHTML = '';
+
+            const preview = parsedData.slice(0, 10);
+            preview.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${row.date}</td>
+                    <td>${row.type}</td>
+                    <td>${row.amount}</td>
+                    <td>${row.currency}</td>
+                    <td>${row.category}</td>
+                    <td>${row.description.substring(0, 50)}</td>
+                `;
+                previewBody.appendChild(tr);
+            });
+
+            document.getElementById('previewSection').style.display = 'block';
+        }
+
+        function displayStats() {
+            const total = parsedData.length;
+            const income = parsedData.filter(t => t.type === 'Income').length;
+            const expense = parsedData.filter(t => t.type === 'Expense').length;
+            const totalAmount = parsedData.reduce((sum, t) => sum + parseFloat(t.amount), 0);
+
+            document.getElementById('totalTransactions').textContent = total;
+            document.getElementById('incomeCount').textContent = income;
+            document.getElementById('expenseCount').textContent = expense;
+            document.getElementById('totalAmount').textContent = totalAmount.toFixed(2) + ' PHP';
+
+            document.getElementById('statsSection').classList.remove('hidden');
+        }
+
+        function downloadCSV() {
+            if (parsedData.length === 0) {
+                showMessage('⚠️ No data to download', 'info');
+                return;
+            }
+
+            const headers = ['Date', 'Type', 'Amount', 'Currency', 'Category', 'Description', 'Mood', 'Tags', 'Notes'];
+            
+            let csv = headers.join(',') + '\n';
+
+            parsedData.forEach(row => {
+                const values = [
+                    row.date,
+                    row.type,
+                    row.amount,
+                    row.currency,
+                    row.category,
+                    `"${row.description.replace(/"/g, '""')}"`, // Escape quotes in description
+                    row.mood,
+                    row.tags,
+                    row.notes
+                ];
+                csv += values.join(',') + '\n';
+            });
+
+            // Create and download file
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            
+            const now = new Date();
+            const timestamp = now.toISOString().split('T')[0];
+            
+            link.setAttribute('href', url);
+            link.setAttribute('download', `transactions-${timestamp}.csv`);
+            link.style.visibility = 'hidden';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            showMessage(`✅ Downloaded ${parsedData.length} transactions as CSV`, 'success');
+        }
+
+        // Allow file selection via drag and drop
+        document.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+
+        document.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                document.getElementById('fileInput').files = files;
+                showMessage('📁 File selected. Click "Parse JSON" to process.', 'info');
+            }
+        });
+    </script>
+</body>
+</html>
