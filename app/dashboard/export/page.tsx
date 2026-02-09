@@ -116,14 +116,15 @@ export default function ExportPage() {
         <CardHeader>
           <CardTitle>Privacy & Encryption Notice</CardTitle>
           <CardDescription>
-            Your data stays encrypted
+            Your data security information
           </CardDescription>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            ℹ️ If you have encryption enabled, exported data will include encrypted
-            fields. You&apos;ll need your encryption key to decrypt the data. Consider
-            exporting your encryption key separately for safekeeping.
+            ℹ️ Exported data is automatically decrypted for readability in
+            spreadsheets and backups. Your data remains encrypted in the database
+            when encryption is enabled. Keep your encryption key safe - you&apos;ll
+            need it to access encrypted data in the database.
           </p>
         </CardContent>
       </Card>

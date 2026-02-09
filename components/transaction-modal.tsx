@@ -24,7 +24,7 @@ interface TransactionModalProps {
 }
 
 export default function TransactionModal({ open, onClose, transaction }: TransactionModalProps) {
-  const { categories, tags, encryptionKey, addTransaction, updateTransaction: updateStore, addTag } = useStore();
+  const { categories, tags, encryptionKey, encryptionConfig, addTransaction, updateTransaction: updateStore, addTag } = useStore();
   
   const [formData, setFormData] = useState({
     amount: '',
@@ -123,6 +123,13 @@ export default function TransactionModal({ open, onClose, transaction }: Transac
     setError('');
 
     try {
+      // Check if encryption is enabled but key is not loaded
+      if (encryptionConfig?.enabled && !encryptionKey) {
+        setError('Encryption key not loaded. Please unlock your encryption first.');
+        setLoading(false);
+        return;
+      }
+
       const amount = parseFloat(formData.amount);
       if (isNaN(amount) || amount <= 0) {
         setError('Please enter a valid amount');

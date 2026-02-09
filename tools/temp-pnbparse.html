@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MBOX Email Parser</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1rem;
+        }
+
+        .controls {
+            padding: 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .control-group {
+            margin-bottom: 20px;
+        }
+
+        .control-group:last-child {
+            margin-bottom: 0;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #495057;
+        }
+
+        input[type="file"],
+        input[type="email"],
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+
+        input[type="file"]:focus,
+        input[type="email"]:focus,
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            flex: 1;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-export {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-export:hover {
+            background: #218838;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+        }
+
+        .stats {
+            padding: 20px 30px;
+            background: #e7f3ff;
+            border-bottom: 1px solid #bee5eb;
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+
+        .results {
+            padding: 30px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .message-card {
+            border: 1px solid #dee2e6;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            transition: box-shadow 0.3s;
+        }
+
+        .message-card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .message-header {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .message-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .message-from {
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 5px;
+        }
+
+        .message-subject {
+            font-size: 1.1rem;
+            color: #212529;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .message-date {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+
+        .message-body {
+            padding: 20px;
+            line-height: 1.6;
+            color: #212529;
+        }
+
+        .message-body iframe {
+            width: 100%;
+            min-height: 300px;
+            border: none;
+            border-radius: 8px;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+
+        .no-results svg {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #667eea;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin: 20px 30px;
+            border: 1px solid #f5c6cb;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.5rem;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            .message-meta {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📧 MBOX Email Parser</h1>
+            <p>Import, filter, and export emails from MBOX files</p>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label for="mboxFile">Select MBOX File(s):</label>
+                <input type="file" id="mboxFile" accept=".mbox,.mbx" multiple />
+                <small style="color: #6c757d; margin-top: 5px; display: block;">💡 Select multiple files to process them all at once</small>
+            </div>
+
+            <div class="control-group">
+                <label for="filterEmail">Filter by Sender Email(s):</label>
+                <textarea id="filterEmail" placeholder="example@gmail.com&#10;another@domain.com&#10;Or comma-separated: email1@domain.com, email2@domain.com" style="min-height: 80px; resize: vertical;"></textarea>
+                <small style="color: #6c757d; margin-top: 5px; display: block;">💡 Enter one email per line, or separate with commas. Leave empty to show all messages.</small>
+            </div>
+
+            <div class="button-group">
+                <button class="btn-primary" id="parseBtn" disabled>Parse & Filter Messages</button>
+                <button class="btn-export" id="exportBtn" disabled>Export Results</button>
+            </div>
+        </div>
+
+        <div id="stats" class="stats" style="display: none;">
+            <div class="stat-item">
+                <div class="stat-value" id="totalMessages">0</div>
+                <div class="stat-label">Total Messages</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="filteredMessages">0</div>
+                <div class="stat-label">Filtered Messages</div>
+            </div>
+        </div>
+
+        <div id="results" class="results">
+            <div class="no-results">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                <h3>No messages loaded</h3>
+                <p>Upload an MBOX file and filter by sender to get started</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allMessages = [];
+        let filteredMessages = [];
+        let processedFiles = [];
+        let totalFilesToProcess = 0;
+        let currentFileIndex = 0;
+
+        const mboxFileInput = document.getElementById('mboxFile');
+        const filterEmailInput = document.getElementById('filterEmail');
+        const parseBtn = document.getElementById('parseBtn');
+        const exportBtn = document.getElementById('exportBtn');
+        const resultsDiv = document.getElementById('results');
+        const statsDiv = document.getElementById('stats');
+
+        // Enable parse button when file is selected
+        mboxFileInput.addEventListener('change', (e) => {
+            parseBtn.disabled = !e.target.files.length;
+        });
+
+        // Parse button click handler
+        parseBtn.addEventListener('click', async () => {
+            const files = mboxFileInput.files;
+            if (!files || files.length === 0) return;
+
+            console.log(`\n📧 Starting bulk processing of ${files.length} file(s)...`);
+            console.log('='.repeat(50));
+            
+            totalFilesToProcess = files.length;
+            currentFileIndex = 0;
+            allMessages = [];
+            processedFiles = [];
+            
+            showLoading(`Processing ${files.length} file(s)...`);
+            
+            try {
+                // Process each file sequentially
+                for (let i = 0; i < files.length; i++) {
+                    currentFileIndex = i + 1;
+                    const file = files[i];
+                    const fileSizeMB = (file.size / 1024 / 1024).toFixed(2);
+                    
+                    console.log(`\n[${currentFileIndex}/${totalFilesToProcess}] Processing: ${file.name} (${fileSizeMB} MB)`);
+                    
+                    showLoading(`Processing file ${currentFileIndex} of ${totalFilesToProcess}: ${file.name}...`);
+                    
+                    try {
+                        const mboxContent = await readFile(file);
+                        console.log(`✓ Read ${file.name}: ${mboxContent.length} characters`);
+                        
+                        const messages = parseMbox(mboxContent);
+                        console.log(`✓ Parsed ${messages.length} messages from ${file.name}`);
+                        
+                        allMessages = allMessages.concat(messages);
+                        processedFiles.push({
+                            name: file.name,
+                            messageCount: messages.length,
+                            size: fileSizeMB
+                        });
+                    } catch (error) {
+                        console.error(`✗ Error processing ${file.name}:`, error.message);
+                        showError(`Error processing ${file.name}: ${error.message}. Continuing with next file...`);
+                        // Continue with next file
+                    }
+                }
+                
+                console.log('\n' + '='.repeat(50));
+                console.log(`✅ Bulk processing complete!`);
+                console.log(`Total messages loaded: ${allMessages.length}`);
+                console.log(`Files processed: ${processedFiles.length}/${totalFilesToProcess}`);
+                
+                if (allMessages.length === 0) {
+                    showError('No messages found in any of the files. The files might be empty or in an unsupported format.');
+                    return;
+                }
+                
+                const filterEmailsRaw = filterEmailInput.value.trim();
+                filterMessages(filterEmailsRaw);
+                
+            } catch (error) {
+                console.error('Bulk processing error:', error);
+                const errorMsg = error && error.message ? error.message : String(error);
+                showError('Error during bulk processing: ' + errorMsg);
+            }
+        });
+
+        // Export button click handler
+        exportBtn.addEventListener('click', () => {
+            exportMessages();
+        });
+
+        // Read file content with multiple strategies
+        async function readFile(file) {
+            // Strategy 1: Try direct text reading for smaller files
+            if (file.size < 50 * 1024 * 1024) { // Under 50MB
+                try {
+                    console.log('Using direct text reading...');
+                    return await readFileAsText(file);
+                } catch (e) {
+                    console.warn('Direct reading failed:', e.message);
+                }
+            }
+            
+            // Strategy 2: Try chunked reading for larger files
+            console.log('Using chunked reading...');
+            try {
+                return await readFileInChunks(file);
+            } catch (e) {
+                console.error('Chunked reading failed:', e.message);
+                throw new Error('Unable to read file. It may be corrupted or too large for the browser.');
+            }
+        }
+
+        // Direct file reading
+        function readFileAsText(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                
+                reader.onload = (e) => {
+                    if (!e.target || !e.target.result) {
+                        reject(new Error('File read returned empty result'));
+                        return;
+                    }
+                    resolve(e.target.result);
+                };
+                
+                reader.onerror = () => {
+                    const errorMsg = reader.error ? reader.error.name + ': ' + reader.error.message : 'Unknown error';
+                    reject(new Error('FileReader error: ' + errorMsg));
+                };
+                
+                reader.onabort = () => {
+                    reject(new Error('File reading was aborted'));
+                };
+                
+                try {
+                    reader.readAsText(file);
+                } catch (e) {
+                    reject(new Error('Failed to start reading: ' + e.message));
+                }
+            });
+        }
+
+        // Chunked file reading for large files
+        function readFileInChunks(file) {
+            return new Promise((resolve, reject) => {
+                const chunkSize = 1024 * 1024; // 1MB chunks
+                let offset = 0;
+                const chunks = [];
+                
+                const readNextChunk = () => {
+                    const reader = new FileReader();
+                    const blob = file.slice(offset, offset + chunkSize);
+                    
+                    reader.onload = (e) => {
+                        if (e.target && e.target.result) {
+                            chunks.push(e.target.result);
+                            offset += chunkSize;
+                            
+                            // Update progress
+                            const progress = Math.min(100, Math.round((offset / file.size) * 100));
+                            if (progress % 10 === 0) {
+                                console.log(`Reading progress: ${progress}%`);
+                            }
+                            
+                            if (offset < file.size) {
+                                // Read next chunk
+                                setTimeout(readNextChunk, 0);
+                            } else {
+                                // Done reading
+                                console.log('Combining chunks...');
+                                resolve(chunks.join(''));
+                            }
+                        } else {
+                            reject(new Error('Chunk read returned empty result'));
+                        }
+                    };
+                    
+                    reader.onerror = () => {
+                        const errorMsg = reader.error ? reader.error.message : 'Unknown error';
+                        reject(new Error('Chunk reading failed: ' + errorMsg));
+                    };
+                    
+                    try {
+                        reader.readAsText(blob);
+                    } catch (e) {
+                        reject(new Error('Failed to read chunk: ' + e.message));
+                    }
+                };
+                
+                readNextChunk();
+            });
+        }
+
+        // Parse MBOX format
+        function parseMbox(content) {
+            if (!content || content.length === 0) {
+                throw new Error('MBOX file is empty');
+            }
+
+            const messages = [];
+            
+            // Google Takeout MBOX files typically use this format
+            // Try multiple patterns to match different MBOX formats
+            const patterns = [
+                /^From \S+@\S+/gm,  // Standard: From email@domain
+                /^From [^\r\n]+$/gm, // Any From line
+                /^From - /gm          // Alternative format
+            ];
+            
+            let parts = null;
+            let usedPattern = null;
+            
+            // Try each pattern until one works
+            for (const pattern of patterns) {
+                const testParts = content.split(pattern);
+                if (testParts.length > 1) {
+                    parts = testParts;
+                    usedPattern = pattern;
+                    console.log(`Using pattern: ${pattern}, found ${parts.length - 1} potential messages`);
+                    break;
+                }
+            }
+            
+            if (!parts || parts.length <= 1) {
+                // Try splitting by double newline as last resort
+                console.log('Standard patterns failed, trying alternative parsing...');
+                parts = content.split(/\n\n(?=From )/g);
+                if (parts.length <= 1) {
+                    throw new Error('Could not detect MBOX message boundaries. This may not be a valid MBOX file.');
+                }
+            }
+            
+            // Skip first empty part
+            for (let i = 1; i < parts.length; i++) {
+                const messagePart = parts[i].trim();
+                if (messagePart) {
+                    try {
+                        const message = parseMessage(messagePart);
+                        if (message && message.fromEmail) {
+                            messages.push(message);
+                        }
+                    } catch (e) {
+                        console.warn(`Failed to parse message ${i}:`, e);
+                        // Continue parsing other messages
+                    }
+                }
+            }
+            
+            if (messages.length === 0) {
+                throw new Error(`Processed ${parts.length - 1} message parts but could not extract any valid messages. Check console for details.`);
+            }
+            
+            return messages;
+        }
+
+        // Parse individual email message
+        function parseMessage(messageText) {
+            if (!messageText) {
+                return null;
+            }
+
+            const lines = messageText.split(/\r?\n/);
+            const headers = {};
+            let bodyStart = 0;
+            let currentHeader = '';
+
+            // Parse headers
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                
+                // Empty line indicates end of headers
+                if (line.trim() === '') {
+                    bodyStart = i + 1;
+                    break;
+                }
+
+                // Check if this is a continuation of previous header (starts with space or tab)
+                if (line.match(/^[ \t]/) && currentHeader) {
+                    headers[currentHeader] += ' ' + line.trim();
+                } else {
+                    // New header
+                    const colonIndex = line.indexOf(':');
+                    if (colonIndex > 0) {
+                        currentHeader = line.substring(0, colonIndex).toLowerCase().trim();
+                        headers[currentHeader] = line.substring(colonIndex + 1).trim();
+                    }
+                }
+            }
+
+            // Parse body
+            const body = lines.slice(bodyStart).join('\n');
+
+            // Extract email from From field
+            const from = headers['from'] || headers['sender'] || '';
+            if (!from) {
+                console.warn('Message has no From header');
+                return null;
+            }
+            
+            const fromEmail = extractEmail(from);
+            if (!fromEmail) {
+                console.warn('Could not extract email from:', from);
+                return null;
+            }
+            
+            return {
+                from: from,
+                fromEmail: fromEmail,
+                to: headers['to'] || '',
+                subject: decodeHeader(headers['subject'] || '(No Subject)'),
+                date: headers['date'] || headers['delivery-date'] || '',
+                contentType: headers['content-type'] || 'text/plain',
+                body: body,
+                rawMessage: messageText
+            };
+        }
+
+        // Extract email address from "Name <email@domain.com>" format
+        function extractEmail(fromField) {
+            const emailMatch = fromField.match(/<([^>]+)>/);
+            if (emailMatch) {
+                return emailMatch[1].toLowerCase();
+            }
+            // If no angle brackets, try to extract email directly
+            const directMatch = fromField.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/);
+            if (directMatch) {
+                return directMatch[1].toLowerCase();
+            }
+            return fromField.toLowerCase();
+        }
+
+        // Decode MIME encoded headers
+        function decodeHeader(header) {
+            // Handle encoded-word format: =?charset?encoding?encoded-text?=
+            const encodedWordRegex = /=\?([^?]+)\?([BQ])\?([^?]+)\?=/gi;
+            
+            return header.replace(encodedWordRegex, (match, charset, encoding, encodedText) => {
+                try {
+                    if (encoding.toUpperCase() === 'B') {
+                        // Base64 decoding
+                        return atob(encodedText);
+                    } else if (encoding.toUpperCase() === 'Q') {
+                        // Quoted-printable decoding
+                        return decodeQuotedPrintable(encodedText);
+                    }
+                } catch (e) {
+                    console.error('Error decoding header:', e);
+                }
+                return match;
+            });
+        }
+
+        // Decode quoted-printable encoding
+        function decodeQuotedPrintable(str) {
+            return str
+                .replace(/_/g, ' ')
+                .replace(/=([0-9A-F]{2})/gi, (match, hex) => {
+                    return String.fromCharCode(parseInt(hex, 16));
+                });
+        }
+
+        // Filter messages by sender email(s)
+        function filterMessages(filterEmailsRaw) {
+            let filterEmails = [];
+            
+            if (filterEmailsRaw && filterEmailsRaw.trim()) {
+                // Split by both commas and newlines
+                const emailList = filterEmailsRaw
+                    .split(/[,\n]/)
+                    .map(e => e.trim().toLowerCase())
+                    .filter(e => e.length > 0);
+                filterEmails = emailList;
+            }
+            
+            if (filterEmails.length === 0) {
+                // No filter, show all messages
+                filteredMessages = allMessages;
+            } else {
+                // Filter messages where sender matches ANY of the provided emails
+                filteredMessages = allMessages.filter(msg => {
+                    return filterEmails.some(filterEmail => 
+                        msg.fromEmail.includes(filterEmail)
+                    );
+                });
+            }
+
+            displayMessages();
+            updateStats();
+            exportBtn.disabled = filteredMessages.length === 0;
+        }
+
+        // Display messages in UI
+        function displayMessages() {
+            if (filteredMessages.length === 0) {
+                resultsDiv.innerHTML = `
+                    <div class="no-results">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <h3>No messages found</h3>
+                        <p>No messages match the current filter</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            filteredMessages.forEach((msg, index) => {
+                const bodyHtml = extractHtmlBody(msg);
+                
+                html += `
+                    <div class="message-card">
+                        <div class="message-header">
+                            <div class="message-subject">${escapeHtml(msg.subject)}</div>
+                            <div class="message-meta">
+                                <div>
+                                    <div class="message-from">From: ${escapeHtml(msg.from)}</div>
+                                    <div class="message-date">${escapeHtml(msg.date)}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="message-body" id="msg-body-${index}">
+                            ${bodyHtml}
+                        </div>
+                    </div>
+                `;
+            });
+
+            resultsDiv.innerHTML = html;
+        }
+
+        // Extract and display HTML body
+        function extractHtmlBody(message) {
+            const contentType = message.contentType.toLowerCase();
+            const body = message.body;
+
+            // Check if multipart
+            if (contentType.includes('multipart')) {
+                const boundaryMatch = contentType.match(/boundary="?([^";]+)"?/i);
+                if (boundaryMatch) {
+                    const boundary = boundaryMatch[1];
+                    const parts = body.split(new RegExp(`--${boundary.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+                    
+                    // Try to find HTML part
+                    for (const part of parts) {
+                        if (part.toLowerCase().includes('content-type: text/html')) {
+                            const htmlBody = extractBodyFromPart(part);
+                            if (htmlBody) {
+                                return createSafeIframe(htmlBody);
+                            }
+                        }
+                    }
+                    
+                    // Fall back to plain text
+                    for (const part of parts) {
+                        if (part.toLowerCase().includes('content-type: text/plain')) {
+                            const textBody = extractBodyFromPart(part);
+                            if (textBody) {
+                                return `<pre style="white-space: pre-wrap; word-wrap: break-word;">${escapeHtml(textBody)}</pre>`;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Single part HTML
+            if (contentType.includes('text/html')) {
+                return createSafeIframe(body);
+            }
+
+            // Plain text
+            return `<pre style="white-space: pre-wrap; word-wrap: break-word;">${escapeHtml(body)}</pre>`;
+        }
+
+        // Extract body content from MIME part
+        function extractBodyFromPart(part) {
+            const lines = part.split('\n');
+            let bodyStart = 0;
+            let encoding = '';
+
+            // Find where headers end and body begins
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].toLowerCase();
+                
+                if (line.includes('content-transfer-encoding:')) {
+                    encoding = line.split(':')[1].trim();
+                }
+                
+                if (lines[i].trim() === '') {
+                    bodyStart = i + 1;
+                    break;
+                }
+            }
+
+            let body = lines.slice(bodyStart).join('\n').trim();
+
+            // Decode if needed
+            if (encoding === 'base64') {
+                try {
+                    body = atob(body.replace(/\s/g, ''));
+                } catch (e) {
+                    console.error('Error decoding base64:', e);
+                }
+            } else if (encoding === 'quoted-printable') {
+                body = decodeQuotedPrintable(body);
+            }
+
+            return body;
+        }
+
+        // Create safe iframe for HTML content
+        function createSafeIframe(htmlContent) {
+            const iframeId = 'iframe-' + Math.random().toString(36).substring(7);
+            
+            // Schedule iframe content writing after DOM update
+            setTimeout(() => {
+                const container = document.getElementById(iframeId);
+                if (container) {
+                    const iframe = document.createElement('iframe');
+                    iframe.style.width = '100%';
+                    iframe.style.minHeight = '300px';
+                    iframe.style.border = 'none';
+                    iframe.sandbox = 'allow-same-origin';
+                    
+                    container.appendChild(iframe);
+                    
+                    const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                    iframeDoc.open();
+                    iframeDoc.write(htmlContent);
+                    iframeDoc.close();
+                    
+                    // Auto-resize iframe
+                    setTimeout(() => {
+                        const height = iframeDoc.body.scrollHeight;
+                        iframe.style.height = Math.max(height, 300) + 'px';
+                    }, 100);
+                }
+            }, 0);
+            
+            return `<div id="${iframeId}"></div>`;
+        }
+
+        // Escape HTML special characters
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Update statistics
+        function updateStats() {
+            document.getElementById('totalMessages').textContent = allMessages.length;
+            document.getElementById('filteredMessages').textContent = filteredMessages.length;
+            statsDiv.style.display = allMessages.length > 0 ? 'flex' : 'none';
+        }
+
+        // Show loading state
+        function showLoading(message = 'Processing...') {
+            resultsDiv.innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>${escapeHtml(message)}</p>
+                </div>
+            `;
+        }
+
+        // Show error message
+        function showError(message) {
+            resultsDiv.innerHTML = `
+                <div class="error">
+                    <strong>Error:</strong> ${escapeHtml(message)}
+                </div>
+            `;
+        }
+
+        // Export messages to JSON
+        function exportMessages() {
+            if (filteredMessages.length === 0) return;
+            
+            // Parse filter emails for metadata
+            const filterEmailsRaw = filterEmailInput.value.trim();
+            let filterEmailsList = [];
+            if (filterEmailsRaw) {
+                filterEmailsList = filterEmailsRaw
+                    .split(/[,\n]/)
+                    .map(e => e.trim().toLowerCase())
+                    .filter(e => e.length > 0);
+            }
+
+            const exportData = {
+                metadata: {
+                    exportDate: new Date().toISOString(),
+                    totalMessages: filteredMessages.length,
+                    filterEmails: filterEmailsList.length > 0 ? filterEmailsList : 'All',
+                    filterCount: filterEmailsList.length,
+                    filesProcessed: processedFiles.length,
+                    files: processedFiles
+                },
+                messages: filteredMessages.map(msg => ({
+                    from: msg.from,
+                    fromEmail: msg.fromEmail,
+                    to: msg.to,
+                    subject: msg.subject,
+                    date: msg.date,
+                    body: msg.body
+                }))
+            };
+
+            const dataStr = JSON.stringify(exportData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `filtered-messages-${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            // Also offer MBOX export
+            setTimeout(() => {
+                if (confirm('Export as MBOX format as well?')) {
+                    exportAsMbox();
+                }
+            }, 100);
+        }
+
+        // Export as MBOX format
+        function exportAsMbox() {
+            let mboxContent = '';
+            
+            filteredMessages.forEach(msg => {
+                mboxContent += `From - ${msg.date}\n`;
+                mboxContent += msg.rawMessage;
+                mboxContent += '\n\n';
+            });
+
+            const dataBlob = new Blob([mboxContent], { type: 'text/plain' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `filtered-messages-${new Date().toISOString().slice(0, 10)}.mbox`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>

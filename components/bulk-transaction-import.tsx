@@ -36,7 +36,7 @@ export default function BulkTransactionImport({
   open,
   onClose,
 }: BulkTransactionImportProps) {
-  const { categories, addTransaction, encryptionKey } = useStore();
+  const { categories, addTransaction, encryptionKey, encryptionConfig } = useStore();
   const [importMode, setImportMode] = useState<'table' | 'csv'>('table');
   const [rows, setRows] = useState<BulkTransactionRow[]>([
     {
@@ -146,6 +146,13 @@ export default function BulkTransactionImport({
     setLoading(true);
     setError('');
     setSuccessCount(0);
+
+    // Check if encryption is enabled but key is not loaded
+    if (encryptionConfig?.enabled && !encryptionKey) {
+      setError('Encryption key not loaded. Please unlock your encryption first.');
+      setLoading(false);
+      return;
+    }
 
     let created = 0;
 

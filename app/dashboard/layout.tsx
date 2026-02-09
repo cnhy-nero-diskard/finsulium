@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import UnlockEncryptionDialog from '@/components/unlock-encryption-dialog';
 
 export default function DashboardLayout({
   children,
@@ -154,6 +155,9 @@ export default function DashboardLayout({
       <main className="ml-64 p-8">
         {children}
       </main>
+
+      {/* Unlock encryption dialog - shows when encryption is enabled but key is not loaded */}
+      <UnlockEncryptionDialog />
     </div>
   );
 }
