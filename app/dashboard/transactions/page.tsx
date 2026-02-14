@@ -6,15 +6,19 @@ import { Button } from '@/components/ui/button';
 import { useStore } from '@/lib/store';
 import TransactionModal from '@/components/transaction-modal';
 import BulkTransactionImport from '@/components/bulk-transaction-import';
+import DeleteTransactionDialog from '@/components/delete-transaction-dialog';
 import { formatCurrency, formatDate, getMoodEmoji } from '@/lib/utils';
 import { Plus, Edit2, Trash2, Filter, Upload } from 'lucide-react';
-import { fetchCategories, fetchTags } from '@/lib/services/transactions';
+import { fetchCategories, fetchTags, deleteTransaction } from '@/lib/services/transactions';
+import type { Transaction } from '@/lib/types';
 
 export default function TransactionsPage() {
-  const { transactions, categories, currency, setCategories, setTags, setLoading } = useStore();
+  const { transactions, categories, currency, setCategories, setTags, setLoading, deleteTransaction: removeTransaction } = useStore();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
   const [filter, setFilter] = useState<'all' | 'income' | 'expense'>('all');
 
   // Load categories and tags on mount
@@ -45,6 +49,26 @@ export default function TransactionsPage() {
   const handleEdit = (transaction: any) => {
     setSelectedTransaction(transaction);
     setIsModalOpen(true);
+  };
+
+  const handleDelete = (transaction: any) => {
+    setTransactionToDelete(transaction);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!transactionToDelete) return;
+
+    try {
+      setLoading(true);
+      await deleteTransaction(transactionToDelete.id);
+      removeTransaction(transactionToDelete.id);
+    } catch (error) {
+      console.error('Failed to delete transaction:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const filteredTransactions = transactions.filter((t) => {
@@ -175,6 +199,14 @@ export default function TransactionsPage() {
                           >
                             <Edit2 className="w-4 h-4" />
                           </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(transaction)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
                         </div>
                       </div>
                     </div>
@@ -195,6 +227,17 @@ export default function TransactionsPage() {
       <BulkTransactionImport
         open={isBulkImportOpen}
         onClose={() => setIsBulkImportOpen(false)}
+      />
+
+      <DeleteTransactionDialog
+        open={deleteDialogOpen}
+        onClose={() => {
+          setDeleteDialogOpen(false);
+          setTransactionToDelete(null);
+        }}
+        transaction={transactionToDelete}
+        currency={currency}
+        onConfirm={handleConfirmDelete}
       />
     </>
   );

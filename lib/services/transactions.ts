@@ -94,6 +94,64 @@ export async function createTransaction(
 }
 
 /**
+ * Batch create multiple transactions (for bulk import)
+ * Much more efficient than creating one at a time
+ */
+export async function batchCreateTransactions(
+  transactions: Omit<Transaction, 'id' | 'created_at' | 'updated_at'>[],
+  encryptionKey?: CryptoKey | null
+): Promise<Transaction[]> {
+  const supabase = getSupabase();
+
+  const dataToInsert = await Promise.all(
+    transactions.map(async (transaction) => {
+      let recordData: any = {
+        type: transaction.type,
+        date: transaction.date,
+        category_id: transaction.category_id,
+        mood: transaction.mood,
+        tags: transaction.tags,
+      };
+
+      // Encrypt sensitive data if encryption is enabled
+      if (encryptionKey) {
+        const { encrypted_data, iv } = await encryptTransaction(
+          {
+            amount: transaction.amount,
+            description: transaction.description,
+            notes: transaction.notes,
+          },
+          encryptionKey
+        );
+        recordData.encrypted_data = encrypted_data;
+        recordData.iv = iv;
+      } else {
+        recordData.amount = transaction.amount;
+        recordData.description = transaction.description;
+        recordData.notes = transaction.notes;
+      }
+
+      return recordData;
+    })
+  );
+
+  const { data, error } = await supabase
+    .from('transactions')
+    .insert(dataToInsert)
+    .select();
+
+  if (error) throw error;
+
+  // Return with decrypted data
+  return (data || []).map((t, idx) => ({
+    ...t,
+    amount: transactions[idx].amount,
+    description: transactions[idx].description,
+    notes: transactions[idx].notes,
+  }));
+}
+
+/**
  * Update a transaction
  */
 export async function updateTransaction(

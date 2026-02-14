@@ -14,7 +14,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { useStore } from '@/lib/store';
-import { createTransaction } from '@/lib/services/transactions';
+import { createTransaction, batchCreateTransactions } from '@/lib/services/transactions';
 import type { Transaction } from '@/lib/types';
 import { AlertCircle, Upload, Plus, Trash2, Check, Eye, Edit2, TrendingUp, TrendingDown, DollarSign, PieChart, BarChart3 } from 'lucide-react';
 import { BarChart, Bar, PieChart as RechartsP, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -55,10 +55,30 @@ export default function BulkTransactionImport({
   const [error, setError] = useState('');
   const [successCount, setSuccessCount] = useState(0);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [dateRangeFrom, setDateRangeFrom] = useState<string>('');
+  const [dateRangeTo, setDateRangeTo] = useState<string>('');
+  const [timelineGranularity, setTimelineGranularity] = useState<'daily' | 'weekly' | 'monthly'>('daily');
 
   // Calculate metrics for preview
   const metrics = useMemo(() => {
-    const validRows = rows.filter(r => r.amount && !isNaN(parseFloat(r.amount)));
+    let validRows = rows.filter(r => r.amount && !isNaN(parseFloat(r.amount)));
+    
+    // Apply date range filter
+    if (dateRangeFrom || dateRangeTo) {
+      validRows = validRows.filter(r => {
+        const transactionDate = new Date(r.date);
+        if (dateRangeFrom) {
+          const fromDate = new Date(dateRangeFrom);
+          if (transactionDate < fromDate) return false;
+        }
+        if (dateRangeTo) {
+          const toDate = new Date(dateRangeTo);
+          toDate.setHours(23, 59, 59, 999);
+          if (transactionDate > toDate) return false;
+        }
+        return true;
+      });
+    }
     
     const totalIncome = validRows
       .filter(r => r.type === 'income')
@@ -80,18 +100,86 @@ export default function BulkTransactionImport({
       categoryBreakdown[r.category].amount += parseFloat(r.amount);
     });
     
+    // Top contributors
+    const categoryBreakdownArray = Object.entries(categoryBreakdown).map(([name, data]) => ({
+      name,
+      amount: data.amount,
+      type: data.type,
+    }));
+    
+    const incomeContributors = categoryBreakdownArray
+      .filter(c => c.type === 'income')
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 5)
+      .map(c => ({
+        ...c,
+        percentage: totalIncome > 0 ? ((c.amount / totalIncome) * 100).toFixed(1) : '0.0',
+      }));
+    
+    const expenseContributors = categoryBreakdownArray
+      .filter(c => c.type === 'expense')
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 5)
+      .map(c => ({
+        ...c,
+        percentage: totalExpenses > 0 ? ((c.amount / totalExpenses) * 100).toFixed(1) : '0.0',
+      }));
+    
+    // Timeline data aggregation
+    const timelineData: Record<string, { income: number; expenses: number; date: string }> = {};
+    validRows.forEach(r => {
+      const date = new Date(r.date);
+      let key: string;
+      
+      switch (timelineGranularity) {
+        case 'daily':
+          key = r.date;
+          break;
+        case 'weekly':
+          const weekStart = new Date(date);
+          weekStart.setDate(date.getDate() - date.getDay());
+          key = weekStart.toISOString().split('T')[0];
+          break;
+        case 'monthly':
+          key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+          break;
+      }
+      
+      if (!timelineData[key]) {
+        timelineData[key] = { income: 0, expenses: 0, date: key };
+      }
+      
+      const amount = parseFloat(r.amount);
+      if (r.type === 'income') {
+        timelineData[key].income += amount;
+      } else {
+        timelineData[key].expenses += amount;
+      }
+    });
+    
+    const timelineArray = Object.values(timelineData)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .map(item => ({
+        date: timelineGranularity === 'monthly' 
+          ? item.date 
+          : new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        income: item.income,
+        expenses: item.expenses,
+        net: item.income - item.expenses,
+        fullDate: item.date,
+      }));
+    
     return {
       totalIncome,
       totalExpenses,
       net,
       count: validRows.length,
-      categoryBreakdown: Object.entries(categoryBreakdown).map(([name, data]) => ({
-        name,
-        amount: data.amount,
-        type: data.type,
-      })),
+      categoryBreakdown: categoryBreakdownArray,
+      incomeContributors,
+      expenseContributors,
+      timelineArray,
     };
-  }, [rows]);
+  }, [rows, dateRangeFrom, dateRangeTo, timelineGranularity]);
 
   const addRow = () => {
     setRows([
@@ -123,23 +211,61 @@ export default function BulkTransactionImport({
 
   const parseCSV = (text: string): BulkTransactionRow[] => {
     const lines = text.trim().split('\n');
+    if (lines.length < 2) return [];
+    
     const parsed: BulkTransactionRow[] = [];
 
-    lines.forEach((line, index) => {
-      if (index === 0) return; // Skip header
-      const [date, type, amount, category, description, mood] = line.split(',').map(s => s.trim());
+    // Parse header row to find column indices
+    const headerLine = lines[0];
+    const headers = headerLine.split(',').map((h, idx) => ({ 
+      name: h.trim().toLowerCase(), 
+      index: idx 
+    }));
+
+    // Find indices for each field (support multiple header variations)
+    const dateIdx = headers.find(h => h.name === 'date' || h.name === 'transaction date')?.index ?? 0;
+    const typeIdx = headers.find(h => h.name === 'type' || h.name === 'transaction type')?.index ?? 1;
+    const amountIdx = headers.find(h => h.name === 'amount' || h.name === 'transaction amount')?.index ?? 2;
+    const categoryIdx = headers.find(h => h.name === 'category' || h.name === 'transaction category')?.index ?? 3;
+    const descIdx = headers.find(h => h.name === 'description' || h.name === 'notes')?.index ?? 4;
+    const moodIdx = headers.find(h => h.name === 'mood')?.index ?? -1;
+
+    // Skip header, parse data rows
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line.trim()) continue; // Skip empty lines
+
+      const cols = line.split(',').map(s => s.trim());
+      const date = cols[dateIdx] || '';
+      const type = cols[typeIdx] || '';
+      const amount = cols[amountIdx] || '';
+      const category = cols[categoryIdx] || '';
+      const description = cols[descIdx] || '';
+      const mood = moodIdx >= 0 ? cols[moodIdx] : '';
 
       if (date && amount) {
+        // Parse date - handle formats like "04 23 2024" or "2024-04-23"
+        let parsedDate = date;
+        if (date.includes(' ') && date.split(' ').length === 3) {
+          // Format: "MM DD YYYY" or "DD MM YYYY"
+          const parts = date.split(' ');
+          const m = parseInt(parts[0]);
+          const d = parseInt(parts[1]);
+          const y = parseInt(parts[2]);
+          // Assume MM DD YYYY format
+          parsedDate = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        }
+
         parsed.push({
-          date: date || new Date().toISOString().split('T')[0],
-          type: (type === 'income' ? 'income' : 'expense') as 'income' | 'expense',
+          date: parsedDate || new Date().toISOString().split('T')[0],
+          type: (type && type.toLowerCase() === 'income' ? 'income' : 'expense') as 'income' | 'expense',
           amount: amount || '',
           category: category || '',
           description: description || '',
           mood: mood || '',
         });
       }
-    });
+    }
 
     return parsed;
   };
@@ -195,18 +321,31 @@ export default function BulkTransactionImport({
     }
 
     let created = 0;
+    let skipped = 0;
+    const skipReasons: Record<string, number> = {
+      'Invalid amount': 0,
+      'Missing category': 0,
+      'Category not found': 0,
+    };
 
     try {
+      // Validate and prepare transactions for batch insert
+      const validTransactions: Omit<Transaction, 'id' | 'created_at' | 'updated_at'>[] = [];
+
       for (const row of rows) {
-        // Validate
+        // Validate amount
         const amount = parseFloat(row.amount);
         if (isNaN(amount) || amount <= 0) {
           console.warn(`Skipping row with invalid amount: ${row.amount}`);
+          skipped++;
+          skipReasons['Invalid amount']++;
           continue;
         }
 
         if (!row.category) {
           console.warn(`Skipping row with missing category`);
+          skipped++;
+          skipReasons['Missing category']++;
           continue;
         }
 
@@ -217,26 +356,34 @@ export default function BulkTransactionImport({
 
         if (!category) {
           console.warn(`Category not found: ${row.category}`);
+          skipped++;
+          skipReasons['Category not found']++;
           continue;
         }
 
-        // Create transaction
-        const newTransaction = await createTransaction(
-          {
-            amount,
-            type: row.type,
-            date: row.date,
-            category_id: category.id,
-            description: row.description || '',
-            mood: row.mood ? (row.mood as any) : undefined,
-            tags: [],
-            notes: '',
-          },
+        // Add to valid transactions array
+        validTransactions.push({
+          amount,
+          type: row.type,
+          date: row.date,
+          category_id: category.id,
+          description: row.description || '',
+          mood: row.mood ? (row.mood as any) : undefined,
+          tags: [],
+          notes: '',
+        });
+      }
+
+      // Batch insert all valid transactions (much faster!)
+      if (validTransactions.length > 0) {
+        const newTransactions = await batchCreateTransactions(
+          validTransactions,
           encryptionKey
         );
 
-        addTransaction(newTransaction);
-        created++;
+        // Add all transactions to store
+        newTransactions.forEach(t => addTransaction(t));
+        created = newTransactions.length;
       }
 
       setSuccessCount(created);
@@ -258,7 +405,12 @@ export default function BulkTransactionImport({
           onClose();
         }, 2000);
       } else {
-        setError('No valid transactions were created');
+        // Build detailed error message
+        const reasons = Object.entries(skipReasons)
+          .filter(([_, count]) => count > 0)
+          .map(([reason, count]) => `${count} × ${reason}`)
+          .join(', ');
+        setError(`No valid transactions were created. Skipped ${skipped} transaction(s): ${reasons}`);
       }
     } catch (err: any) {
       setError(err.message || 'Failed to import transactions');
@@ -276,6 +428,39 @@ export default function BulkTransactionImport({
 
   const categoryNames = categories.map(c => c.name);
   const validRows = rows.filter(r => r.amount && r.category);
+
+  // Calculate validation issues
+  const validationIssues = useMemo(() => {
+    const issues: Array<{ row: number; issue: string; category?: string }> = [];
+    const missingCategories = new Set<string>();
+
+    rows.forEach((row, index) => {
+      // Check amount
+      const amount = parseFloat(row.amount);
+      if (!row.amount || isNaN(amount) || amount <= 0) {
+        issues.push({ row: index + 1, issue: 'Invalid or missing amount' });
+      }
+
+      // Check category
+      if (!row.category) {
+        issues.push({ row: index + 1, issue: 'Missing category' });
+      } else {
+        const category = categories.find(c => 
+          c.name.toLowerCase() === row.category.toLowerCase()
+        );
+        if (!category) {
+          issues.push({ 
+            row: index + 1, 
+            issue: 'Category not found', 
+            category: row.category 
+          });
+          missingCategories.add(row.category);
+        }
+      }
+    });
+
+    return { issues, missingCategories: Array.from(missingCategories) };
+  }, [rows, categories]);
 
   const handleProceedToPreview = () => {
     if (validRows.length === 0) {
@@ -507,6 +692,95 @@ export default function BulkTransactionImport({
         {/* PREVIEW MODE */}
         {mode === 'preview' && (
           <div className="space-y-6">
+            {/* Validation Warnings */}
+            {validationIssues.issues.length > 0 && (
+              <Card className="border-amber-200 bg-amber-50">
+                <CardHeader>
+                  <CardTitle className="text-sm flex items-center text-amber-700">
+                    <AlertCircle className="w-4 h-4 mr-2" />
+                    Validation Issues ({validationIssues.issues.length})
+                  </CardTitle>
+                  <CardDescription>
+                    These transactions will be skipped during import
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {validationIssues.missingCategories.length > 0 && (
+                    <div className="p-3 bg-white rounded border border-amber-200">
+                      <p className="text-sm font-medium text-amber-900 mb-2">
+                        Categories not found in your account:
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {validationIssues.missingCategories.map((cat, idx) => (
+                          <span key={idx} className="px-2 py-1 bg-amber-100 text-amber-800 rounded text-xs font-medium">
+                            {cat}
+                          </span>
+                        ))}
+                      </div>
+                      <p className="text-xs text-amber-700 mt-2">
+                        💡 Tip: Create these categories in Settings before importing, or edit the transaction categories below.
+                      </p>
+                    </div>
+                  )}
+                  <div className="max-h-32 overflow-y-auto space-y-1">
+                    {validationIssues.issues.slice(0, 10).map((issue, idx) => (
+                      <div key={idx} className="text-xs text-amber-700 flex items-start gap-2">
+                        <span className="font-medium">Row {issue.row}:</span>
+                        <span>{issue.issue}</span>
+                        {issue.category && (
+                          <span className="font-medium">"{issue.category}"</span>
+                        )}
+                      </div>
+                    ))}
+                    {validationIssues.issues.length > 10 && (
+                      <p className="text-xs text-amber-600 italic">
+                        ...and {validationIssues.issues.length - 10} more issues
+                      </p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Date Range Filter */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Filter by Date Range</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="date-from" className="text-xs mb-2 block">From Date</Label>
+                    <Input
+                      id="date-from"
+                      type="date"
+                      value={dateRangeFrom}
+                      onChange={(e) => setDateRangeFrom(e.target.value)}
+                      className="h-9"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="date-to" className="text-xs mb-2 block">To Date</Label>
+                    <Input
+                      id="date-to"
+                      type="date"
+                      value={dateRangeTo}
+                      onChange={(e) => setDateRangeTo(e.target.value)}
+                      className="h-9"
+                    />
+                  </div>
+                </div>
+                {(dateRangeFrom || dateRangeTo) && (
+                  <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
+                    Showing {metrics.count} transaction{metrics.count !== 1 ? 's' : ''} 
+                    {dateRangeFrom && ` from ${dateRangeFrom}`}
+                    {dateRangeFrom && dateRangeTo && ' to '}
+                    {dateRangeTo && `${dateRangeTo}`}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             {/* Metrics Summary */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Card className="border-green-200 bg-green-50">
@@ -547,6 +821,148 @@ export default function BulkTransactionImport({
                 </CardContent>
               </Card>
             </div>
+
+            {/* Top Contributors Section */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Top Income Contributors */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm flex items-center text-green-700">
+                    <TrendingUp className="w-4 h-4 mr-2" />
+                    Top Income Sources
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {metrics.incomeContributors.length > 0 ? (
+                    <div className="space-y-3">
+                      {metrics.incomeContributors.map((contributor, idx) => (
+                        <div key={idx} className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <p className="font-medium text-sm">{idx + 1}. {contributor.name}</p>
+                            <div className="w-full bg-green-100 rounded-full h-2 mt-1">
+                              <div
+                                className="bg-green-500 h-2 rounded-full"
+                                style={{ width: `${contributor.percentage}%` }}
+                              />
+                            </div>
+                          </div>
+                          <div className="text-right ml-3">
+                            <p className="font-bold text-green-700">{contributor.amount.toFixed(2)}</p>
+                            <p className="text-xs text-gray-500">{contributor.percentage}%</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">No income transactions</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Top Expense Contributors */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm flex items-center text-red-700">
+                    <TrendingDown className="w-4 h-4 mr-2" />
+                    Top Expense Categories
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {metrics.expenseContributors.length > 0 ? (
+                    <div className="space-y-3">
+                      {metrics.expenseContributors.map((contributor, idx) => (
+                        <div key={idx} className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <p className="font-medium text-sm">{idx + 1}. {contributor.name}</p>
+                            <div className="w-full bg-red-100 rounded-full h-2 mt-1">
+                              <div
+                                className="bg-red-500 h-2 rounded-full"
+                                style={{ width: `${contributor.percentage}%` }}
+                              />
+                            </div>
+                          </div>
+                          <div className="text-right ml-3">
+                            <p className="font-bold text-red-700">{contributor.amount.toFixed(2)}</p>
+                            <p className="text-xs text-gray-500">{contributor.percentage}%</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">No expense transactions</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Timeline Graph */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm flex items-center">
+                    <BarChart3 className="w-4 h-4 mr-2" />
+                    Transaction Timeline
+                  </CardTitle>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant={timelineGranularity === 'daily' ? 'default' : 'outline'}
+                      onClick={() => setTimelineGranularity('daily')}
+                      className="h-7 text-xs"
+                    >
+                      Daily
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={timelineGranularity === 'weekly' ? 'default' : 'outline'}
+                      onClick={() => setTimelineGranularity('weekly')}
+                      className="h-7 text-xs"
+                    >
+                      Weekly
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={timelineGranularity === 'monthly' ? 'default' : 'outline'}
+                      onClick={() => setTimelineGranularity('monthly')}
+                      className="h-7 text-xs"
+                    >
+                      Monthly
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {metrics.timelineArray.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={metrics.timelineArray}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis 
+                        dataKey="date" 
+                        angle={-45} 
+                        textAnchor="end" 
+                        height={80}
+                      />
+                      <YAxis />
+                      <Tooltip 
+                        contentStyle={{
+                          backgroundColor: '#fff',
+                          border: '1px solid #ccc',
+                          borderRadius: '4px'
+                        }}
+                        formatter={(value: any) => typeof value === 'number' ? value.toFixed(2) : value}
+                      />
+                      <Legend />
+                      <Bar dataKey="income" stackId="a" fill="#22c55e" name="Income" />
+                      <Bar dataKey="expenses" stackId="a" fill="#ef4444" name="Expenses" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-64 flex items-center justify-center text-gray-500">
+                    No transactions in the selected date range
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             {/* Charts */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -619,7 +1035,18 @@ export default function BulkTransactionImport({
             {/* Transaction List with Edit/Delete */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">Transaction Details ({validRows.length} transactions)</CardTitle>
+                <CardTitle className="text-sm">
+                  Transaction Details 
+                  {(dateRangeFrom || dateRangeTo) ? (
+                    <span className="text-xs font-normal text-gray-600 ml-2">
+                      ({metrics.count} in range, {validRows.length} total)
+                    </span>
+                  ) : (
+                    <span className="text-xs font-normal text-gray-600 ml-2">
+                      ({validRows.length} total)
+                    </span>
+                  )}
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2 max-h-[300px] overflow-y-auto">
@@ -706,9 +1133,29 @@ export default function BulkTransactionImport({
                         key={index}
                         className={`p-3 border rounded-lg flex items-center justify-between ${
                           isValid
-                            ? row.type === 'income'
-                              ? 'bg-green-50 border-green-200'
-                              : 'bg-red-50 border-red-200'
+                            ? (() => {
+                                // Check if within date range
+                                const transactionDate = new Date(row.date);
+                                let withinRange = true;
+                                
+                                if (dateRangeFrom) {
+                                  const fromDate = new Date(dateRangeFrom);
+                                  if (transactionDate < fromDate) withinRange = false;
+                                }
+                                if (dateRangeTo) {
+                                  const toDate = new Date(dateRangeTo);
+                                  toDate.setHours(23, 59, 59, 999);
+                                  if (transactionDate > toDate) withinRange = false;
+                                }
+                                
+                                if (!withinRange) {
+                                  return 'bg-gray-50 border-gray-200 opacity-40';
+                                }
+                                
+                                return row.type === 'income'
+                                  ? 'bg-green-50 border-green-200'
+                                  : 'bg-red-50 border-red-200';
+                              })()
                             : 'bg-gray-50 border-gray-300 opacity-50'
                         }`}
                       >
