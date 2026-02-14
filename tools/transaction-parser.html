@@ -398,6 +398,24 @@
             return 0;
         }
 
+        function extractPurpose(body) {
+            if (!body) return '';
+            
+            // Match pattern: Purpose:\n[whitespace]\n[whitespace]\n[whitespace][PURPOSE_TEXT]
+            // The purpose is typically on its own line after multiple line breaks and spaces
+            const match = body.match(/Purpose:\s*\n[\s\n]*?([^\n<]+?)(?:\s*<\/p>|\s*<\/td>|\n|$)/i);
+            
+            if (match && match[1]) {
+                // Clean up the extracted text: remove extra whitespace and HTML entities
+                let purpose = match[1].trim();
+                // Remove any remaining HTML tags if present
+                purpose = purpose.replace(/<[^>]+>/g, '').trim();
+                return purpose;
+            }
+            
+            return '';
+        }
+
         function formatDate(dateString) {
             if (!dateString) return '';
             
@@ -491,6 +509,9 @@
                     // Skip transactions with 0 amount
                     if (amount === 0) return;
 
+                    const purpose = extractPurpose(message.body);
+                    const notes = purpose ? `PURPOSE: ${purpose}` : '';
+
                     const transaction = {
                         date: formatDate(message.date),
                         type: determineType(message),
@@ -500,7 +521,7 @@
                         description: message.subject || '',
                         mood: '',
                         tags: '',
-                        notes: ''
+                        notes: notes
                     };
 
                     parsedData.push(transaction);
@@ -576,7 +597,7 @@
                     `"${row.description.replace(/"/g, '""')}"`, // Escape quotes in description
                     row.mood,
                     row.tags,
-                    row.notes
+                    `"${row.notes.replace(/"/g, '""')}"` // Escape quotes in notes
                 ];
                 csv += values.join(',') + '\n';
             });
